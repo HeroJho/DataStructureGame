@@ -65,6 +65,9 @@ public class Heap
 			temp = node[parent].getObj();
 			temp.GetComponent<MeshRenderer>().material.color = Color.red;
 
+			temp.GetComponent<AudioSource>().pitch = node[parent].getKey() / 100f;
+			temp.GetComponent<AudioSource>().Play();
+
 			// 현재 노드의 자식 노드 중 더 큰 자식 노드를 찾음
 			if (child < size && getLeft(parent).getKey() > getRight(parent).getKey())
 				child++;                // child: 더 큰 자식 노드 인덱스

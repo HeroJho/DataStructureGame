@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,20 +13,39 @@ public class SortManager : MonoBehaviour
     [SerializeField]
     private Scrollbar GerateBar;
     [SerializeField]
-    private Camera Camera;
+    private Dropdown WayForSorting;
+    [SerializeField]
+    private GameObject SortingButton;
 
     STATE state = STATE.NOMAL;
     private int GerateCount;
     private int PreGerateCount;
     private float StartXPos;
-
     public static bool isView = false;
 
-    public List<GameObject> Records = new List<GameObject>();
+    Coroutine nowCo = null;
+    List<GameObject> Records = new List<GameObject>();
+    List<GameObject> TempRecords = new List<GameObject>();
+
+    public Image pan;
+    IEnumerator PadeOutPan()
+    {
+        float a = 255f;
+        float t = 0;
+        while (a > 0)
+        {
+            t += 0.1f;
+            a -= t;
+            pan.color = new Color(pan.color.r, pan.color.g, pan.color.b, a / 255f);
+            yield return new WaitForSeconds(0.1f);
+        }
+    }
 
     void Start()
     {
-        Camera = Camera.main;
+        Screen.SetResolution(1920, 1080, true);
+        StartCoroutine(PadeOutPan());
+        Cursor.visible = false;
     }
 
     void Update()
@@ -68,9 +88,6 @@ public class SortManager : MonoBehaviour
             AdjRecordPos();
         }
 
-        // Ä«¸Þ¶ó
-        Camera.transform.position = new Vector3(0, 3 + (GerateCount/3f), -15 -(GerateCount*0.5f));
-
         PreGerateCount = GerateCount;
     }
     void AdjRecordPos()
@@ -85,14 +102,17 @@ public class SortManager : MonoBehaviour
 
     public void MixRecord()
     {
-        if (state != STATE.NOMAL)
+        if (nowCo != null)
             return;
 
         if (Records.Count <= 0)
             return;
 
         state = STATE.MIX;
-        StartCoroutine("StartMixing");
+
+        SortingButton.GetComponentInChildren<Text>().text = "Stoping";
+        SortingButton.GetComponentInChildren<Image>().color = new Color(245 / 255f, 10 / 255f, 10 / 255f, 100 / 255f);
+        nowCo = StartCoroutine("StartMixing");
     }
     IEnumerator StartMixing()
     {
@@ -100,33 +120,105 @@ public class SortManager : MonoBehaviour
 
         int index1 = 0;
         int index2 = 0;
+        float cR = 0;
+        float cG = 0;
+        float cB = 0;
 
         while (mixingCount < 200)
         {
             index1 = Random.Range(0, Records.Count);
             index2 = Random.Range(0, Records.Count);
 
+            cR = Random.Range(0, 1f);
+            cG = Random.Range(0, 1f);
+            cB = Random.Range(0, 1f);
+
+            Records[index1].GetComponent<AudioSource>().pitch = GetScaleY(Records[index1]) / 100f;
+            Records[index1].GetComponent<AudioSource>().Play();
+
+            Records[index1].GetComponent<MeshRenderer>().material.color = new Color(cR, cG, cB, 0.7f);
+            Records[index2].GetComponent<MeshRenderer>().material.color = new Color(cR, cG, cB, 0.7f);
+
+            yield return null;
+
             Swap(index1, index2);
-
             ++mixingCount;
+        }
 
+        for (int i = 0; i < Records.Count; i++)
+        {
+            Records[i].GetComponent<MeshRenderer>().material.color = Color.white;
             yield return null;
         }
 
         state = STATE.NOMAL;
+        nowCo = null;
+        SortingButton.GetComponentInChildren<Text>().text = "Sorting";
+        SortingButton.GetComponentInChildren<Image>().color = new Color(245 / 255f, 245 / 255f, 245 / 255f, 100 / 255f);
     }
 
-
-
-
-    public void SelectionSort()
+    bool isheapri = false;
+    public void StartOrStopSorting()
     {
-        if (state != STATE.NOMAL)
+        if (nowCo != null)
+        {
+            if(isheapri)
+            {
+                Records = TempRecords.ToList();
+                AdjRecordPos();
+                isheapri = false;
+            }
+
+            StopAllCoroutines();
+            nowCo = null;
+            state = STATE.NOMAL;
+            SortingButton.GetComponentInChildren<Text>().text = "Sorting";
+            SortingButton.GetComponentInChildren<Image>().color = new Color(245 / 255f, 245 / 255f, 245 / 255f, 100 / 255f);
             return;
+        }
 
         state = STATE.SORT;
-        StartCoroutine("SelectionSorting");
+
+        SortingButton.GetComponentInChildren<Text>().text = "Stoping";
+        SortingButton.GetComponentInChildren<Image>().color = new Color(245/255f, 10 / 255f, 10 / 255f, 100 / 255f);
+
+        isheapri = false;
+        switch (WayForSorting.value)
+        {
+            case 0:
+                nowCo = StartCoroutine("SelectionSorting");
+                break;
+            case 1:
+                nowCo = StartCoroutine("BubbleSorting");
+                break;
+            case 2:
+                nowCo = StartCoroutine("ShellSorting");
+                break;
+            case 3:
+                nowCo = StartCoroutine("MergeSort");
+                break;
+            case 4:
+                nowCo = StartCoroutine("QuickSorting");
+                break;
+            case 5:
+                nowCo = StartCoroutine("HeapSorting");
+                isheapri = true;
+                break;
+            case 6:
+                nowCo = StartCoroutine("RadixSorting");
+                isheapri = true;
+                break;
+            case 7:
+                nowCo = StartCoroutine("BogoSorting");
+                break;
+            default:
+                break;
+        }
     }
+    
+
+
+
     IEnumerator SelectionSorting()
     {
         for (int i = 0; i < Records.Count - 1; i++)
@@ -136,6 +228,10 @@ public class SortManager : MonoBehaviour
             for (int j = i + 1; j < Records.Count; j++)
             {
                 Records[j].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                Records[j].GetComponent<AudioSource>().pitch = GetScaleY(Records[j]) / 100f;
+                Records[j].GetComponent<AudioSource>().Play();
+
                 if (GetScaleY(Records[j]) < GetScaleY(Records[least]))
                 {
                     if(i != least)
@@ -152,40 +248,39 @@ public class SortManager : MonoBehaviour
             Swap(i, least);
         }
 
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
 
-    public void BubbleSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("BubbleSorting");
-    }
     IEnumerator BubbleSorting()
     {
         for (int i = Records.Count - 1; i > 0; --i)
         {
             for (int j = 0; j < i; j++)
             {
+                Records[j].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                yield return null;
+
                 if (GetScaleY(Records[j]) > GetScaleY(Records[j + 1]))
                 {
+                    Records[j+1].GetComponent<AudioSource>().pitch = GetScaleY(Records[j + 1]) / 100f;
+                    Records[j + 1].GetComponent<AudioSource>().Play();
+                    Records[j].GetComponent<MeshRenderer>().material.color = Color.white;
                     Swap(j, j + 1);
                 }
-                yield return null;
+                else
+                {
+                    Records[j + 1].GetComponent<AudioSource>().pitch = GetScaleY(Records[j + 1]) / 100f;
+                    Records[j + 1].GetComponent<AudioSource>().Play();
+
+                    Records[j].GetComponent<MeshRenderer>().material.color = Color.white;
+                }
             }
         }
+
+        nowCo = StartCoroutine("EndSorting");
     }
 
-    public void ShellSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("ShellSorting");
-    }
     IEnumerator ShellSorting()
     {
         int z, u;
@@ -201,30 +296,30 @@ public class SortManager : MonoBehaviour
                     objKey = Records[z];
                     for (u = z - gap; u >= i && GetScaleY(objKey) < GetScaleY(Records[u]); u = u - gap)
                     {
-                        Swap(u + gap, u);
+                        Records[u].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                        Records[u].GetComponent<AudioSource>().pitch = GetScaleY(Records[u]) / 100f;
+                        Records[u].GetComponent<AudioSource>().Play();
+
                         yield return null;
+
+                        Records[u].GetComponent<MeshRenderer>().material.color = Color.white;
+
+                        Swap(u + gap, u);
                     }
                     Records[u + gap] = objKey;
                 }
             }
         }
 
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
 
-    public void MergSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("MergeSort");
-    }
     IEnumerator MergeSort()
     {
         // StartCoroutine("MergeSorting");
         yield return StartCoroutine(mergeSort(0, Records.Count-1));
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
     IEnumerator merge(int left, int mid, int right)
     {
@@ -242,6 +337,12 @@ public class SortManager : MonoBehaviour
             {
                 Records[i].GetComponent<MeshRenderer>().material.color = Color.red;
                 Records[j].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                Records[i].GetComponent<AudioSource>().pitch = GetScaleY(Records[i]) / 100f;
+                Records[i].GetComponent<AudioSource>().Play();
+
+                Records[j].GetComponent<AudioSource>().pitch = GetScaleY(Records[j]) / 100f;
+                Records[j].GetComponent<AudioSource>().Play();
             }
 
             yield return null;
@@ -256,10 +357,8 @@ public class SortManager : MonoBehaviour
                 obj = Records[j++];
             }
 
-            if(CheckLength(i-1))
-                Records[i-1].GetComponent<MeshRenderer>().material.color = Color.white;
-            if (CheckLength(j - 1))
-                Records[j-1].GetComponent<MeshRenderer>().material.color = Color.white;
+            if (CheckLength(i-1)) Records[i - 1].GetComponent<MeshRenderer>().material.color = Color.white;
+            if (CheckLength(j - 1)) Records[j - 1].GetComponent<MeshRenderer>().material.color = Color.white;
 
             sorted[k++] = obj;
         }
@@ -290,18 +389,10 @@ public class SortManager : MonoBehaviour
             int mid = (left + right) / 2;
             yield return StartCoroutine(mergeSort(left, mid));
             yield return StartCoroutine(mergeSort(mid + 1, right));
-            yield return StartCoroutine(merge(left, mid, right)); //merge(left, mid, right);
+            yield return StartCoroutine(merge(left, mid, right));
         }
     }
 
-    public void QuickSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("QuickSorting");
-    }
     IEnumerator quickSort(int left, int right)
     {
         if (left < right)
@@ -320,6 +411,10 @@ public class SortManager : MonoBehaviour
                     if(CheckLength(low))
                     {
                         Records[low].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                        Records[low].GetComponent<AudioSource>().pitch = GetScaleY(Records[low]) / 100f;
+                        Records[low].GetComponent<AudioSource>().Play();
+
                         yield return null;
                         Records[low].GetComponent<MeshRenderer>().material.color = Color.white;
                     }
@@ -332,6 +427,10 @@ public class SortManager : MonoBehaviour
                     if (CheckLength(high))
                     {
                         Records[high].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                        Records[high].GetComponent<AudioSource>().pitch = GetScaleY(Records[high]) / 100f;
+                        Records[high].GetComponent<AudioSource>().Play();
+
                         yield return null;
                         Records[high].GetComponent<MeshRenderer>().material.color = Color.white;
                     }
@@ -356,20 +455,13 @@ public class SortManager : MonoBehaviour
     {
         yield return StartCoroutine(quickSort(0, Records.Count-1));
 
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
 
-    public void HeapSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("HeapSorting");
-    }
     IEnumerator HeapSorting()
     {
         Heap q = new Heap();
+        TempRecords = Records.ToList();
 
         for (int i = 0; i < Records.Count; i++)
         {
@@ -386,19 +478,14 @@ public class SortManager : MonoBehaviour
 
         yield return null;
 
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
 
-    public void RadixSort()
-    {
-        if (state != STATE.NOMAL)
-            return;
-
-        state = STATE.SORT;
-        StartCoroutine("RadixSorting");
-    }
     IEnumerator RadixSorting()
     {
+        Heap q = new Heap();
+        TempRecords = Records.ToList();
+
         Queue<GameObject>[] queues = new Queue<GameObject>[10];
 
         for (int i = 0; i < 10; i++)
@@ -417,6 +504,10 @@ public class SortManager : MonoBehaviour
                 {
                     Records[i] = queues[b].Dequeue();
                     Records[i].GetComponent<MeshRenderer>().material.color = Color.red;
+
+                    Records[i].GetComponent<AudioSource>().pitch = GetScaleY(Records[i]) / 100f;
+                    Records[i].GetComponent<AudioSource>().Play();
+
                     Records[i].transform.position = new Vector3(StartXPos + i, Records[i].transform.position.y, Records[i].transform.position.z);
                     yield return null;
                     Records[i].GetComponent<MeshRenderer>().material.color = Color.white;
@@ -425,9 +516,52 @@ public class SortManager : MonoBehaviour
             factor *= 10;
         }
 
-        StartCoroutine("EndSorting");
+        nowCo = StartCoroutine("EndSorting");
     }
 
+    IEnumerator BogoSorting()
+    {
+        int key = 0;
+        int mixingCount = 0;
+        int index1 = 0, index2 = 0;
+        float cR = 0, cG = 0, cB = 0;
+
+        while (true)
+        {
+            if (key >= Records.Count)
+                break;
+
+            while (mixingCount < 50)
+            {
+                index1 = Random.Range(key, Records.Count);
+                index2 = Random.Range(key, Records.Count);
+
+                cR = Random.Range(0, 1f);
+                cG = Random.Range(0, 1f);
+                cB = Random.Range(0, 1f);
+
+                Records[index1].GetComponent<AudioSource>().pitch = GetScaleY(Records[index1]) / 100f;
+                Records[index1].GetComponent<AudioSource>().Play();
+
+                Records[index1].GetComponent<MeshRenderer>().material.color = new Color(cR, cG, cB, 0.7f);
+                Records[index2].GetComponent<MeshRenderer>().material.color = new Color(cR, cG, cB, 0.7f);
+
+                Swap(index1, index2);
+                ++mixingCount;
+            }
+            mixingCount = 0;
+            yield return null;
+
+            if((key + 1) == GetScaleY(Records[key]))
+            {
+                Records[key].GetComponent<MeshRenderer>().material.color = Color.white;
+                ++key;
+            }
+
+        }
+
+        nowCo = StartCoroutine("EndSorting");
+    }
 
 
 
@@ -436,6 +570,8 @@ public class SortManager : MonoBehaviour
         for (int i = 0; i < Records.Count; i++)
         {
             Records[i].GetComponent<MeshRenderer>().material.color = Color.green;
+            Records[i].GetComponent<AudioSource>().pitch = 2+ GetScaleY(Records[i]) / 100f;
+            Records[i].GetComponent<AudioSource>().Play();
             yield return null;
         }
         for (int i = 0; i < Records.Count; i++)
@@ -444,7 +580,9 @@ public class SortManager : MonoBehaviour
         }
 
         state = STATE.NOMAL;
-        StopAllCoroutines();
+        SortingButton.GetComponentInChildren<Text>().text = "Sorting";
+        SortingButton.GetComponentInChildren<Image>().color = new Color(245 / 255f, 245 / 255f, 245 / 255f, 100 / 255f);
+        nowCo = null;
     }
 
     void Swap(int index1, int index2)
